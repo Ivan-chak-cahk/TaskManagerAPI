@@ -35,13 +35,20 @@ class Task(Base):
     )
 
     status: Mapped[TaskStatus] = mapped_column(
-        SQLEnum(TaskStatus),
+        SQLEnum(
+            TaskStatus,
+            # сохранять статус задачи только в виде строго определенных текстовых значений
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
         default=TaskStatus.NEW,
         nullable=False,
     )
 
     priority: Mapped[TaskPriority] = mapped_column(
-        SQLEnum(TaskPriority),
+        SQLEnum(
+            TaskPriority,
+            values_callable=lambda enum: [item.value for item in enum],
+        ),
         default=TaskPriority.MEDIUM,
         nullable=False,
     )
