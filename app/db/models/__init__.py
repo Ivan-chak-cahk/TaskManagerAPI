@@ -1,0 +1,8 @@
+# чтобы SQLAlchemy увидел обе модели.
+from app.db.models.task import Task
+from app.db.models.user import User
+
+__all__ = [
+    "Task",
+    "User",
+]
