@@ -214,3 +214,91 @@ def test_users_can_only_see_their_own_tasks(client):
         second_tasks[0]["user_id"]
         == second_register.json()["id"]
     )
+
+# тест на получение задачи по id
+def test_get_task_by_id(client):
+    client.post(
+        "/auth/register",
+        json={
+            "username": "detail_user",
+            "email": "detail_user@example.com",
+            "password": "test_password",
+        },
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "detail_user@example.com",
+            "password": "test_password",
+        },
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Конкретная задача"},
+    )
+    assert create_response.status_code == 201
+
+    task_id = create_response.json()["id"]
+
+    response = client.get(f"/tasks/{task_id}", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["id"] == task_id
+    assert response.json()["title"] == "Конкретная задача"
+
+# тест на недоступность чужой задачи
+def test_user_cannot_get_another_users_task(client):
+    first_user = {
+        "username": "owner_user",
+        "email": "owner@example.com",
+        "password": "test_password",
+    }
+    second_user = {
+        "username": "other_user",
+        "email": "other@example.com",
+        "password": "test_password",
+    }
+
+    client.post("/auth/register", json=first_user)
+    client.post("/auth/register", json=second_user)
+
+    owner_login = client.post(
+        "/auth/login",
+        json={
+            "email": first_user["email"],
+            "password": first_user["password"],
+        },
+    )
+    other_login = client.post(
+        "/auth/login",
+        json={
+            "email": second_user["email"],
+            "password": second_user["password"],
+        },
+    )
+
+    owner_headers = {
+        "Authorization": f"Bearer {owner_login.json()['access_token']}"
+    }
+    other_headers = {
+        "Authorization": f"Bearer {other_login.json()['access_token']}"
+    }
+
+    create_response = client.post(
+        "/tasks",
+        headers=owner_headers,
+        json={"title": "Чужая задача"},
+    )
+    task_id = create_response.json()["id"]
+    # пытаемся получить задачу другого пользователя
+    response = client.get(
+        f"/tasks/{task_id}",
+        headers=other_headers,
+    )
+
+    assert response.status_code == 404

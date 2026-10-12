@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select
+from fastapi import HTTPException, status
 
 from app.db.models import Task, User
 from app.schemas.task import TaskCreate
@@ -33,3 +34,24 @@ def get_user_tasks(db: Session, user: User) -> list[Task]:
     )
 
     return list(db.scalars(statement).all())
+
+# получение одной конкретной задачи по ID
+def get_task_by_id(
+    db: Session,
+    task_id: int,
+    user: User,
+) -> Task:
+    task = db.scalar(
+        select(Task).where(
+            Task.id == task_id,  # условие находит задачу по ID
+            Task.user_id == user.id,  # ограничивает поиск задачами текущего пользователя
+        )
+    )
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+
+    return task
