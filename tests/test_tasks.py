@@ -138,3 +138,79 @@ def test_get_tasks_without_token(client):
     response = client.get("/tasks")
 
     assert response.status_code == 401
+
+
+def test_users_can_only_see_their_own_tasks(client):
+    first_user = {
+        "username": "first_user",
+        "email": "first@example.com",
+        "password": "test_password",
+    }
+    second_user = {
+        "username": "second_user",
+        "email": "second@example.com",
+        "password": "test_password",
+    }
+
+    first_register = client.post("/auth/register", json=first_user)
+    second_register = client.post("/auth/register", json=second_user)
+
+    assert first_register.status_code == 201
+    assert second_register.status_code == 201
+
+    first_login = client.post(
+        "/auth/login",
+        json={
+            "email": first_user["email"],
+            "password": first_user["password"],
+        },
+    )
+    second_login = client.post(
+        "/auth/login",
+        json={
+            "email": second_user["email"],
+            "password": second_user["password"],
+        },
+    )
+
+    first_headers = {
+        "Authorization": f"Bearer {first_login.json()['access_token']}"
+    }
+    second_headers = {
+        "Authorization": f"Bearer {second_login.json()['access_token']}"
+    }
+
+    client.post(
+        "/tasks",
+        headers=first_headers,
+        json={"title": "Задача первого пользователя"},
+    )
+    client.post(
+        "/tasks",
+        headers=second_headers,
+        json={"title": "Задача второго пользователя"},
+    )
+
+    first_response = client.get("/tasks", headers=first_headers)
+    second_response = client.get("/tasks", headers=second_headers)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+
+    first_tasks = first_response.json()
+    second_tasks = second_response.json()
+
+    assert len(first_tasks) == 1
+    assert len(second_tasks) == 1
+
+    assert first_tasks[0]["title"] == "Задача первого пользователя"
+    assert second_tasks[0]["title"] == "Задача второго пользователя"
+    # пользователи видят свои задачи
+    assert (
+        first_tasks[0]["user_id"]
+        == first_register.json()["id"]
+    )
+    assert (
+        second_tasks[0]["user_id"]
+        == second_register.json()["id"]
+    )
