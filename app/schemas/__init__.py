@@ -1,6 +1,6 @@
 from app.schemas.auth import TokenResponse, UserLogin
 from app.schemas.user import UserCreate, UserResponse
-from app.schemas.task import TaskCreate, TaskResponse
+from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
 
 __all__ = [
     "TokenResponse",
@@ -9,4 +9,5 @@ __all__ = [
     "UserResponse",
     "TaskCreate",
     "TaskResponse",
+    "TaskUpdate",
 ]

@@ -24,3 +24,14 @@ class TaskResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     user_id: int
+
+
+class TaskUpdate(BaseModel):
+    title: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=255,
+    )
+    description: str | None = None
+    status: TaskStatus | None = None
+    priority: TaskPriority | None = None
