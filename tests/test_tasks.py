@@ -84,3 +84,57 @@ def test_create_task_with_empty_title(client):
     )
 
     assert response.status_code == 422
+
+
+def test_get_tasks(client):
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "username": "list_user",
+            "email": "list_user@example.com",
+            "password": "test_password",
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "list_user@example.com",
+            "password": "test_password",
+        },
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Первая задача"},
+    )
+    client.post(
+        "/tasks",
+        headers=headers,
+        json={"title": "Вторая задача"},
+    )
+
+    response = client.get("/tasks", headers=headers)
+    # проверка получение списка задач
+    assert response.status_code == 200
+
+    data = response.json()
+    assert len(data) == 2
+    assert {task["title"] for task in data} == {
+        "Первая задача",
+        "Вторая задача",
+    }
+    assert all(  # у каждой задачи правильный владелец
+        task["user_id"] == register_response.json()["id"]
+        for task in data
+    )
+
+
+def test_get_tasks_without_token(client):
+    response = client.get("/tasks")
+
+    assert response.status_code == 401

@@ -1,4 +1,5 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import select
 
 from app.db.models import Task, User
 from app.schemas.task import TaskCreate
@@ -22,3 +23,13 @@ def create_task(
     db.refresh(task)
 
     return task
+
+# получение списка задач пользователя
+def get_user_tasks(db: Session, user: User) -> list[Task]:
+    statement = (
+        select(Task)
+        .where(Task.user_id == user.id)
+        .order_by(Task.created_at.desc())
+    )
+
+    return list(db.scalars(statement).all())
