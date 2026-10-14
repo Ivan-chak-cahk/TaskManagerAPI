@@ -302,3 +302,105 @@ def test_user_cannot_get_another_users_task(client):
     )
 
     assert response.status_code == 404
+
+# Проверяем частичное обновление задачи
+def test_update_task(client):
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "username": "ivan",
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/tasks",
+        json={
+            "title": "Learn FastAPI",
+            "description": "Read documentation",
+        },
+        headers=headers,
+    )
+    assert create_response.status_code == 201
+
+    task_id = create_response.json()["id"]
+
+    update_response = client.patch(
+        f"/tasks/{task_id}",
+        json={"status": "in_progress"},
+        headers=headers,
+    )
+
+    assert update_response.status_code == 200
+
+    updated_task = update_response.json()
+    assert updated_task["status"] == "in_progress"
+    assert updated_task["title"] == "Learn FastAPI"
+    assert updated_task["description"] == "Read documentation"
+    assert updated_task["priority"] == "medium"
+
+# Проверяем защиту чужих задач
+def test_user_cannot_update_another_users_task(client):
+    first_user = {
+        "username": "ivan",
+        "email": "ivan@example.com",
+        "password": "strongpassword123",
+    }
+    second_user = {
+        "username": "petr",
+        "email": "petr@example.com",
+        "password": "strongpassword123",
+    }
+
+    client.post("/auth/register", json=first_user)
+    client.post("/auth/register", json=second_user)
+
+    first_login = client.post(
+        "/auth/login",
+        json={
+            "email": first_user["email"],
+            "password": first_user["password"],
+        },
+    )
+    first_token = first_login.json()["access_token"]
+    first_headers = {"Authorization": f"Bearer {first_token}"}
+
+    second_login = client.post(
+        "/auth/login",
+        json={
+            "email": second_user["email"],
+            "password": second_user["password"],
+        },
+    )
+    second_token = second_login.json()["access_token"]
+    second_headers = {"Authorization": f"Bearer {second_token}"}
+    # один юзер создал задачу
+    task_response = client.post(
+        "/tasks",
+        json={"title": "Private task"},
+        headers=first_headers,
+    )
+    task_id = task_response.json()["id"]
+    # другой пытается изменить
+    update_response = client.patch(
+        f"/tasks/{task_id}",
+        json={"title": "Hacked task"},
+        headers=second_headers,
+    )
+
+    assert update_response.status_code == 404
+
+# Мб надо было авторизацию и регистрацию юзеров запихнуть в конфиг фикстуры.
+# А то как-то громоздко всё
