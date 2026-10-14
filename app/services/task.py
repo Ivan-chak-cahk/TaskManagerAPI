@@ -69,11 +69,20 @@ def update_task(
     # Обновляем атрибуты объекта
     for field, value in update_data.items():
         setattr(task, field, value)
-
+    # setattr() позволяет менять атрибут объекта по имени, хранящемуся в строке.
+    # Например, setattr(task, "title", "Новый заголовок") эквивалентен task.title = "Новый заголовок".
     db.commit()
     db.refresh(task)
 
     return task
 
-# setattr() позволяет менять атрибут объекта по имени, хранящемуся в строке.
-# Например, setattr(task, "title", "Новый заголовок") эквивалентен task.title = "Новый заголовок".
+
+def delete_task(
+        db: Session,
+        task_id: int,
+        user: User
+) -> None:
+    task = get_task_by_id(db, task_id, user)
+
+    db.delete(task)
+    db.commit()

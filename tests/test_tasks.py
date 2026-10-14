@@ -401,6 +401,104 @@ def test_user_cannot_update_another_users_task(client):
     )
 
     assert update_response.status_code == 404
-
 # Мб надо было авторизацию и регистрацию юзеров запихнуть в конфиг фикстуры.
 # А то как-то громоздко всё
+
+def test_delete_task(client):
+    client.post(
+        "/auth/register",
+        json={
+            "username": "ivan",
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Task to delete"},
+        headers=headers,
+    )
+    task_id = create_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/tasks/{task_id}",
+        headers=headers,
+    )
+
+    assert delete_response.status_code == 204
+    assert delete_response.content == b""
+
+    get_response = client.get(
+        f"/tasks/{task_id}",
+        headers=headers,
+    )
+    assert get_response.status_code == 404
+
+
+def test_user_cannot_delete_another_users_task(client):
+    first_user = {
+        "username": "ivan",
+        "email": "ivan@example.com",
+        "password": "strongpassword123",
+    }
+    second_user = {
+        "username": "petr",
+        "email": "petr@example.com",
+        "password": "strongpassword123",
+    }
+
+    client.post("/auth/register", json=first_user)
+    client.post("/auth/register", json=second_user)
+
+    first_login = client.post(
+        "/auth/login",
+        json={
+            "email": first_user["email"],
+            "password": first_user["password"],
+        },
+    )
+    first_headers = {
+        "Authorization": f"Bearer {first_login.json()['access_token']}"
+    }
+
+    second_login = client.post(
+        "/auth/login",
+        json={
+            "email": second_user["email"],
+            "password": second_user["password"],
+        },
+    )
+    second_headers = {
+        "Authorization": f"Bearer {second_login.json()['access_token']}"
+    }
+
+    task_response = client.post(
+        "/tasks",
+        json={"title": "Private task"},
+        headers=first_headers,
+    )
+    task_id = task_response.json()["id"]
+
+    delete_response = client.delete(
+        f"/tasks/{task_id}",
+        headers=second_headers,
+    )
+
+    assert delete_response.status_code == 404
+
+    get_response = client.get(
+        f"/tasks/{task_id}",
+        headers=first_headers,
+    )
+    assert get_response.status_code == 200

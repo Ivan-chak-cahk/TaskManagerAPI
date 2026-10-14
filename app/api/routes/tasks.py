@@ -9,6 +9,7 @@ from app.services.task import (
     get_user_tasks,
     get_task_by_id,
     update_task,
+    delete_task,
 )
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
@@ -52,3 +53,12 @@ def update_task_endpoint(
     current_user: User = Depends(get_current_user),
 ):
     return update_task(db, task_id, task_data, current_user)
+
+
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task_endpoint(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    delete_task(db, task_id, current_user)
