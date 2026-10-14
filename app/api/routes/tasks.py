@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
@@ -33,6 +33,8 @@ def create_task_endpoint(
 def list_tasks(
     status_filter: TaskStatus | None = None,
     priority_filter: TaskPriority | None = None,
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -41,6 +43,8 @@ def list_tasks(
         current_user,
         status_filter,
         priority_filter,
+        limit,
+        offset,
     )
 
 # получение задачи по id

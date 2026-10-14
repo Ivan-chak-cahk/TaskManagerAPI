@@ -1,6 +1,12 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+    field_validator
+)
 
 from app.db.models.task import TaskPriority, TaskStatus
 
@@ -10,6 +16,16 @@ class TaskCreate(BaseModel):
     description: str | None = None
     status: TaskStatus = TaskStatus.NEW
     priority: TaskPriority = TaskPriority.MEDIUM
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        value = value.strip()
+
+        if not value:
+            raise ValueError("Title cannot be empty or whitespace")
+
+        return value
 
 
 class TaskResponse(BaseModel):

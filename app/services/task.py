@@ -32,6 +32,8 @@ def get_user_tasks(
     user: User,
     status_filter: TaskStatus | None = None,
     priority_filter: TaskPriority | None = None,
+    limit: int = 20,
+    offset: int = 0,  # пропускает указанное количество записей.
 ) -> list[Task]:
     statement = select(Task).where(Task.user_id == user.id)
     # выполнится если есть фильтр
@@ -39,8 +41,13 @@ def get_user_tasks(
         statement = statement.where(Task.status == status_filter)
     if priority_filter is not None:
         statement = statement.where(Task.priority == priority_filter)
-    # sort по дате создания
-    statement = statement.order_by(Task.created_at.desc())
+    # теперь возвращает макс 20 задач за раз
+    statement = (
+        statement
+        .order_by(Task.created_at.desc(), Task.id.desc())
+        .limit(limit)
+        .offset(offset)
+    )
 
     return list(db.scalars(statement).all())
 

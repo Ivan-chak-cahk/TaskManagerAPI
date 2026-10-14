@@ -608,3 +608,156 @@ def test_filter_tasks_by_status_and_priority(client):
     assert tasks[0]["title"] == "New high priority"
     assert tasks[0]["status"] == "new"
     assert tasks[0]["priority"] == "high"
+
+
+def test_task_pagination(client):
+    client.post(
+        "/auth/register",
+        json={
+            "username": "ivan",
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for title in ["Task 1", "Task 2", "Task 3"]:
+        response = client.post(
+            "/tasks",
+            json={"title": title},
+            headers=headers,
+        )
+        assert response.status_code == 201
+    # должно вывести последние 2 созданные задачи
+    response = client.get(
+        "/tasks?limit=2&offset=0",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    tasks = response.json()
+    assert len(tasks) == 2
+    assert [task["title"] for task in tasks] == ["Task 3", "Task 2"]
+    # offset=2 пропускаем первые две задачи
+    response = client.get(
+        "/tasks?limit=2&offset=2",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    tasks = response.json()
+    assert len(tasks) == 1
+    assert tasks[0]["title"] == "Task 1"
+
+
+def test_task_pagination_rejects_invalid_parameters(client):
+    client.post(
+        "/auth/register",
+        json={
+            "username": "ivan",
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    # задаем неправильные параметры
+    invalid_queries = [
+        "/tasks?limit=0",
+        "/tasks?limit=101",
+        "/tasks?offset=-1",
+    ]
+
+    for query in invalid_queries:
+        response = client.get(query, headers=headers)
+        assert response.status_code == 422
+
+
+def test_task_pagination_with_filters(client):
+    client.post(
+        "/auth/register",
+        json={
+            "username": "ivan",
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    for title in ["High 1", "Low", "High 2"]:
+        priority = "low" if title == "Low" else "high"
+        response = client.post(
+            "/tasks",
+            json={
+                "title": title,
+                "status": "new",
+                "priority": priority,
+            },
+            headers=headers,
+        )
+        assert response.status_code == 201
+
+    response = client.get(
+        "/tasks?priority_filter=high&limit=1&offset=1",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    tasks = response.json()
+    assert len(tasks) == 1
+    assert tasks[0]["title"] == "High 1"
+
+
+def test_create_task_with_whitespace_title(client):
+    client.post(
+        "/auth/register",
+        json={
+            "username": "ivan",
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    #
+    response = client.post(
+        "/tasks",
+        json={"title": "   "},
+        headers=headers,
+    )
+
+    assert response.status_code == 422
