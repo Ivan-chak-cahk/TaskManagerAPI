@@ -3,6 +3,7 @@ from sqlalchemy import select
 from fastapi import HTTPException, status
 
 from app.db.models import Task, User
+from app.db.models.task import TaskStatus
 from app.schemas.task import TaskCreate, TaskUpdate
 
 # Сохранение задачи в БД
@@ -26,12 +27,17 @@ def create_task(
     return task
 
 # получение списка задач пользователя
-def get_user_tasks(db: Session, user: User) -> list[Task]:
-    statement = (
-        select(Task)
-        .where(Task.user_id == user.id)
-        .order_by(Task.created_at.desc())
-    )
+def get_user_tasks(
+    db: Session,
+    user: User,
+    status_filter: TaskStatus | None = None,
+) -> list[Task]:
+    statement = select(Task).where(Task.user_id == user.id)
+    # выполнится если есть фильтр
+    if status_filter is not None:
+        statement = statement.where(Task.status == status_filter)
+    # sort по дате создания
+    statement = statement.order_by(Task.created_at.desc())
 
     return list(db.scalars(statement).all())
 
