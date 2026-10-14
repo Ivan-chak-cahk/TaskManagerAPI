@@ -3,7 +3,7 @@ from sqlalchemy import select
 from fastapi import HTTPException, status
 
 from app.db.models import Task, User
-from app.db.models.task import TaskStatus
+from app.db.models.task import TaskStatus, TaskPriority
 from app.schemas.task import TaskCreate, TaskUpdate
 
 # Сохранение задачи в БД
@@ -31,11 +31,14 @@ def get_user_tasks(
     db: Session,
     user: User,
     status_filter: TaskStatus | None = None,
+    priority_filter: TaskPriority | None = None,
 ) -> list[Task]:
     statement = select(Task).where(Task.user_id == user.id)
     # выполнится если есть фильтр
     if status_filter is not None:
         statement = statement.where(Task.status == status_filter)
+    if priority_filter is not None:
+        statement = statement.where(Task.priority == priority_filter)
     # sort по дате создания
     statement = statement.order_by(Task.created_at.desc())
 

@@ -502,3 +502,109 @@ def test_user_cannot_delete_another_users_task(client):
         headers=first_headers,
     )
     assert get_response.status_code == 200
+
+# Фильтрация по приоритету
+def test_filter_tasks_by_priority(client):
+    client.post(
+        "/auth/register",
+        json={
+            "username": "ivan",
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    client.post(
+        "/tasks",
+        json={"title": "Low priority task", "priority": "low"},
+        headers=headers,
+    )
+    client.post(
+        "/tasks",
+        json={"title": "High priority task", "priority": "high"},
+        headers=headers,
+    )
+
+    response = client.get(
+        "/tasks?priority_filter=high",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    tasks = response.json()
+    assert len(tasks) == 1
+    assert tasks[0]["title"] == "High priority task"
+    assert tasks[0]["priority"] == "high"
+
+# Совместная фильтрация
+def test_filter_tasks_by_status_and_priority(client):
+    client.post(
+        "/auth/register",
+        json={
+            "username": "ivan",
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "ivan@example.com",
+            "password": "strongpassword123",
+        },
+    )
+    token = login_response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    client.post(
+        "/tasks",
+        json={
+            "title": "New high priority",
+            "status": "new",
+            "priority": "high",
+        },
+        headers=headers,
+    )
+    client.post(
+        "/tasks",
+        json={
+            "title": "In progress high priority",
+            "status": "in_progress",
+            "priority": "high",
+        },
+        headers=headers,
+    )
+    client.post(
+        "/tasks",
+        json={
+            "title": "New low priority",
+            "status": "new",
+            "priority": "low",
+        },
+        headers=headers,
+    )
+
+    response = client.get(
+        "/tasks?status_filter=new&priority_filter=high",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+
+    tasks = response.json()
+    assert len(tasks) == 1
+    assert tasks[0]["title"] == "New high priority"
+    assert tasks[0]["status"] == "new"
+    assert tasks[0]["priority"] == "high"

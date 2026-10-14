@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db
 from app.db.models import User
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
-from app.db.models.task import TaskStatus
+from app.db.models.task import TaskStatus, TaskPriority
 from app.services.task import (
     create_task,
     get_user_tasks,
@@ -32,10 +32,16 @@ def create_task_endpoint(
 @router.get("", response_model=list[TaskResponse])
 def list_tasks(
     status_filter: TaskStatus | None = None,
+    priority_filter: TaskPriority | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return get_user_tasks(db, current_user, status_filter)
+    return get_user_tasks(
+        db,
+        current_user,
+        status_filter,
+        priority_filter,
+    )
 
 # получение задачи по id
 @router.get("/{task_id}", response_model=TaskResponse)
