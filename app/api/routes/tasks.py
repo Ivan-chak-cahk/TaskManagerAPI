@@ -3,8 +3,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_db
 from app.db.models import User
-from app.schemas.task import TaskCreate, TaskResponse
-from app.services.task import create_task, get_user_tasks, get_task_by_id
+from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
+from app.services.task import (
+    create_task,
+    get_user_tasks,
+    get_task_by_id,
+    update_task,
+)
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -37,3 +42,13 @@ def get_task(
     current_user: User = Depends(get_current_user),
 ):
     return get_task_by_id(db, task_id, current_user)
+
+# обновление задачи
+@router.patch("/{task_id}", response_model=TaskResponse)
+def update_task_endpoint(
+    task_id: int,
+    task_data: TaskUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return update_task(db, task_id, task_data, current_user)

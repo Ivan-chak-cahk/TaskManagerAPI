@@ -3,7 +3,7 @@ from sqlalchemy import select
 from fastapi import HTTPException, status
 
 from app.db.models import Task, User
-from app.schemas.task import TaskCreate
+from app.schemas.task import TaskCreate, TaskUpdate
 
 # Сохранение задачи в БД
 def create_task(
@@ -55,3 +55,25 @@ def get_task_by_id(
         )
 
     return task
+
+
+def update_task(
+    db: Session,
+    task_id: int,
+    task_data: TaskUpdate,
+    user: User,
+) -> Task:
+    task = get_task_by_id(db, task_id, user)
+    # Получаем только переданные (измененные) поля
+    update_data = task_data.model_dump(exclude_unset=True)
+    # Обновляем атрибуты объекта
+    for field, value in update_data.items():
+        setattr(task, field, value)
+
+    db.commit()
+    db.refresh(task)
+
+    return task
+
+# setattr() позволяет менять атрибут объекта по имени, хранящемуся в строке.
+# Например, setattr(task, "title", "Новый заголовок") эквивалентен task.title = "Новый заголовок".

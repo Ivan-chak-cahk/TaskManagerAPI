@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.db.models.task import TaskPriority, TaskStatus
 
@@ -35,3 +35,9 @@ class TaskUpdate(BaseModel):
     description: str | None = None
     status: TaskStatus | None = None
     priority: TaskPriority | None = None
+    # чтобы заголовок оставался необязательным при пропуске, но не мог быть явно задан как null.
+    @model_validator(mode="after")
+    def validate_title(self):
+        if "title" in self.model_fields_set and self.title is None:
+            raise ValueError("Title cannot be null")
+        return self
