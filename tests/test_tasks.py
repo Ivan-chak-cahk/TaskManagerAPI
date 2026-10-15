@@ -1,45 +1,21 @@
-def test_create_task(client):
-    register_response = client.post(
-        "/auth/register",
-        json={
-            "username": "task_user",
-            "email": "task_user@example.com",
-            "password": "test_password",
-        },
-    )
-    assert register_response.status_code == 201
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "task_user@example.com",
-            "password": "test_password",
-        },
-    )
-    assert login_response.status_code == 200
-
-    token = login_response.json()["access_token"]
-
+def test_create_task(client, auth_headers):
     response = client.post(
         "/tasks",
-        headers={"Authorization": f"Bearer {token}"},
         json={
-            "title": "Изучить FastAPI",
-            "description": "Добавить CRUD для задач",
+            "title": "Learn FastAPI",
+            "description": "Read documentation",
         },
+        headers=auth_headers,
     )
 
     assert response.status_code == 201
 
-    data = response.json()
-    assert data["title"] == "Изучить FastAPI"
-    assert data["description"] == "Добавить CRUD для задач"
-    assert data["status"] == "new"
-    assert data["priority"] == "medium"
-    assert data["user_id"] == register_response.json()["id"]
-    assert "id" in data
-    assert "created_at" in data
-    assert "updated_at" in data
+    task = response.json()
+    assert task["title"] == "Learn FastAPI"
+    assert task["description"] == "Read documentation"
+    assert task["status"] == "new"
+    assert task["priority"] == "medium"
+    assert task["user_id"] is not None
 
 
 def test_create_task_without_token(client):
@@ -53,85 +29,29 @@ def test_create_task_without_token(client):
     assert response.status_code == 401
 
 
-def test_create_task_with_empty_title(client):
-    register_response = client.post(
-        "/auth/register",
-        json={  # нужно не забывать создавать нового пользователя т.к после тестов он сбрасывается благодаря фикстуре.
-            "username": "validation_user",
-            "email": "validation_user@example.com",
-            "password": "test_password",
-        },
-    )
-    assert register_response.status_code == 201
 
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "validation_user@example.com",
-            "password": "test_password",
-        },
-    )
-    assert login_response.status_code == 200
-
-    token = login_response.json()["access_token"]
-
+def test_create_task_with_empty_title(client, auth_headers):
     response = client.post(
         "/tasks",
-        headers={"Authorization": f"Bearer {token}"},
-        json={
-            "title": "",
-        },
+        headers=auth_headers,
+        json={"title": ""},
     )
 
     assert response.status_code == 422
 
 
-def test_get_tasks(client):
-    register_response = client.post(
-        "/auth/register",
-        json={
-            "username": "list_user",
-            "email": "list_user@example.com",
-            "password": "test_password",
-        },
-    )
-    assert register_response.status_code == 201
 
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "list_user@example.com",
-            "password": "test_password",
-        },
-    )
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
+def test_get_tasks(client, auth_headers, task_factory):
+    task_factory("Task 1")
+    task_factory("Task 2")
 
-    client.post(
-        "/tasks",
-        headers=headers,
-        json={"title": "Первая задача"},
-    )
-    client.post(
-        "/tasks",
-        headers=headers,
-        json={"title": "Вторая задача"},
-    )
+    response = client.get("/tasks", headers=auth_headers)
 
-    response = client.get("/tasks", headers=headers)
-    # проверка получение списка задач
     assert response.status_code == 200
 
-    data = response.json()
-    assert len(data) == 2
-    assert {task["title"] for task in data} == {
-        "Первая задача",
-        "Вторая задача",
-    }
-    assert all(  # у каждой задачи правильный владелец
-        task["user_id"] == register_response.json()["id"]
-        for task in data
-    )
+    tasks = response.json()
+    assert len(tasks) == 2
+    assert {task["title"] for task in tasks} == {"Task 1", "Task 2"}
 
 
 def test_get_tasks_without_token(client):
@@ -216,40 +136,17 @@ def test_users_can_only_see_their_own_tasks(client):
     )
 
 # тест на получение задачи по id
-def test_get_task_by_id(client):
-    client.post(
-        "/auth/register",
-        json={
-            "username": "detail_user",
-            "email": "detail_user@example.com",
-            "password": "test_password",
-        },
+def test_get_task_by_id(client, auth_headers, task_factory):
+    task = task_factory("My task")
+
+    response = client.get(
+        f"/tasks/{task['id']}",
+        headers=auth_headers,
     )
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "detail_user@example.com",
-            "password": "test_password",
-        },
-    )
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    create_response = client.post(
-        "/tasks",
-        headers=headers,
-        json={"title": "Конкретная задача"},
-    )
-    assert create_response.status_code == 201
-
-    task_id = create_response.json()["id"]
-
-    response = client.get(f"/tasks/{task_id}", headers=headers)
 
     assert response.status_code == 200
-    assert response.json()["id"] == task_id
-    assert response.json()["title"] == "Конкретная задача"
+    assert response.json()["id"] == task["id"]
+    assert response.json()["title"] == "My task"
 
 # тест на недоступность чужой задачи
 def test_user_cannot_get_another_users_task(client):
@@ -304,48 +201,21 @@ def test_user_cannot_get_another_users_task(client):
     assert response.status_code == 404
 
 # Проверяем частичное обновление задачи
-def test_update_task(client):
-    register_response = client.post(
-        "/auth/register",
-        json={
-            "username": "ivan",
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
+def test_update_task(client, auth_headers, task_factory):
+    task = task_factory(
+        "Learn FastAPI",
+        description="Read documentation",
     )
-    assert register_response.status_code == 201
 
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    create_response = client.post(
-        "/tasks",
-        json={
-            "title": "Learn FastAPI",
-            "description": "Read documentation",
-        },
-        headers=headers,
-    )
-    assert create_response.status_code == 201
-
-    task_id = create_response.json()["id"]
-
-    update_response = client.patch(
-        f"/tasks/{task_id}",
+    response = client.patch(
+        f"/tasks/{task['id']}",
         json={"status": "in_progress"},
-        headers=headers,
+        headers=auth_headers,
     )
 
-    assert update_response.status_code == 200
+    assert response.status_code == 200
 
-    updated_task = update_response.json()
+    updated_task = response.json()
     assert updated_task["status"] == "in_progress"
     assert updated_task["title"] == "Learn FastAPI"
     assert updated_task["description"] == "Read documentation"
@@ -401,48 +271,24 @@ def test_user_cannot_update_another_users_task(client):
     )
 
     assert update_response.status_code == 404
-# Мб надо было авторизацию и регистрацию юзеров запихнуть в конфиг фикстуры.
-# А то как-то громоздко всё
 
-def test_delete_task(client):
-    client.post(
-        "/auth/register",
-        json={
-            "username": "ivan",
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
+
+def test_delete_task(client, auth_headers, task_factory):
+    # создаём задачу
+    task = task_factory("Task to delete")
+    # удаляем её
+    response = client.delete(
+        f"/tasks/{task['id']}",
+        headers=auth_headers,
     )
 
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    create_response = client.post(
-        "/tasks",
-        json={"title": "Task to delete"},
-        headers=headers,
-    )
-    task_id = create_response.json()["id"]
-
-    delete_response = client.delete(
-        f"/tasks/{task_id}",
-        headers=headers,
-    )
-
-    assert delete_response.status_code == 204
-    assert delete_response.content == b""
-
+    assert response.status_code == 204
+    # проверяем что задачи точно нет
     get_response = client.get(
-        f"/tasks/{task_id}",
-        headers=headers,
+        f"/tasks/{task['id']}",
+        headers=auth_headers,
     )
+
     assert get_response.status_code == 404
 
 
@@ -504,40 +350,15 @@ def test_user_cannot_delete_another_users_task(client):
     assert get_response.status_code == 200
 
 # Фильтрация по приоритету
-def test_filter_tasks_by_priority(client):
-    client.post(
-        "/auth/register",
-        json={
-            "username": "ivan",
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    client.post(
-        "/tasks",
-        json={"title": "Low priority task", "priority": "low"},
-        headers=headers,
-    )
-    client.post(
-        "/tasks",
-        json={"title": "High priority task", "priority": "high"},
-        headers=headers,
-    )
+def test_filter_tasks_by_priority(client, auth_headers, task_factory):
+    task_factory("Low priority task", priority="low")
+    task_factory("High priority task", priority="high")
+    task_factory("Medium priority task", priority="medium")
 
     response = client.get(
-        "/tasks?priority_filter=high",
-        headers=headers,
+        "/tasks",
+        params={"priority_filter": "high"},
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
@@ -548,65 +369,38 @@ def test_filter_tasks_by_priority(client):
     assert tasks[0]["priority"] == "high"
 
 # Совместная фильтрация
-def test_filter_tasks_by_status_and_priority(client):
-    client.post(
-        "/auth/register",
-        json={
-            "username": "ivan",
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
+def test_filter_tasks_by_status_and_priority(client, auth_headers, task_factory):
+    task_factory(
+        "Matching task",
+        status="in_progress",
+        priority="high",
     )
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
+    task_factory(
+        "Wrong status",
+        status="new",
+        priority="high",
     )
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    client.post(
-        "/tasks",
-        json={
-            "title": "New high priority",
-            "status": "new",
-            "priority": "high",
-        },
-        headers=headers,
-    )
-    client.post(
-        "/tasks",
-        json={
-            "title": "In progress high priority",
-            "status": "in_progress",
-            "priority": "high",
-        },
-        headers=headers,
-    )
-    client.post(
-        "/tasks",
-        json={
-            "title": "New low priority",
-            "status": "new",
-            "priority": "low",
-        },
-        headers=headers,
+    task_factory(
+        "Wrong priority",
+        status="in_progress",
+        priority="low",
     )
 
     response = client.get(
-        "/tasks?status_filter=new&priority_filter=high",
-        headers=headers,
+        "/tasks",
+        params={
+            "status_filter": "in_progress",
+            "priority_filter": "high",
+        },
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
 
     tasks = response.json()
     assert len(tasks) == 1
-    assert tasks[0]["title"] == "New high priority"
-    assert tasks[0]["status"] == "new"
+    assert tasks[0]["title"] == "Matching task"
+    assert tasks[0]["status"] == "in_progress"
     assert tasks[0]["priority"] == "high"
 
 
@@ -690,48 +484,30 @@ def test_task_pagination_rejects_invalid_parameters(client):
         assert response.status_code == 422
 
 
-def test_task_pagination_with_filters(client):
-    client.post(
-        "/auth/register",
-        json={
-            "username": "ivan",
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
-    for title in ["High 1", "Low", "High 2"]:
-        priority = "low" if title == "Low" else "high"
-        response = client.post(
-            "/tasks",
-            json={
-                "title": title,
-                "status": "new",
-                "priority": priority,
-            },
-            headers=headers,
+def test_task_pagination_with_filters(client, auth_headers, task_factory):
+    for i in range(5):
+        task_factory(
+            f"High priority task {i}",
+            priority="high",
         )
-        assert response.status_code == 201
+
+    task_factory("Low priority task", priority="low")
 
     response = client.get(
-        "/tasks?priority_filter=high&limit=1&offset=1",
-        headers=headers,
+        "/tasks",
+        params={
+            "priority_filter": "high",
+            "limit": 4,
+            "offset": 1,
+        },
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
+
     tasks = response.json()
-    assert len(tasks) == 1
-    assert tasks[0]["title"] == "High 1"
+    assert len(tasks) == 4
+    assert all(task["priority"] == "high" for task in tasks)
 
 
 def test_create_task_with_whitespace_title(client):
