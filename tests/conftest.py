@@ -93,3 +93,46 @@ def task_factory(client, auth_headers):
         return response.json()
     # Фикстура возвращает саму функцию create_task (без круглых скобок, то есть ссылку на неё), делая её доступной в тестах.
     return create_task
+
+
+@pytest.fixture
+def user_factory(client):
+    def create_user(
+        username,
+        email,
+        password="strongpassword123",
+    ):
+        user_data = {
+            "username": username,
+            "email": email,
+            "password": password,
+        }
+
+        register_response = client.post(
+            "/auth/register",
+            json=user_data,
+        )
+        assert register_response.status_code == 201
+
+        login_response = client.post(
+            "/auth/login",
+            json={
+                "email": email,
+                "password": password,
+            },
+        )
+        assert login_response.status_code == 200
+
+        token = login_response.json()["access_token"]
+
+        return {
+            "id": register_response.json()["id"],
+            "username": username,
+            "email": email,
+            "password": password,
+            "headers": {
+                "Authorization": f"Bearer {token}",
+            },
+        }
+
+    return create_user

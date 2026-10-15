@@ -29,7 +29,6 @@ def test_create_task_without_token(client):
     assert response.status_code == 401
 
 
-
 def test_create_task_with_empty_title(client, auth_headers):
     response = client.post(
         "/tasks",
@@ -38,7 +37,6 @@ def test_create_task_with_empty_title(client, auth_headers):
     )
 
     assert response.status_code == 422
-
 
 
 def test_get_tasks(client, auth_headers, task_factory):
@@ -60,59 +58,26 @@ def test_get_tasks_without_token(client):
     assert response.status_code == 401
 
 
-def test_users_can_only_see_their_own_tasks(client):
-    first_user = {
-        "username": "first_user",
-        "email": "first@example.com",
-        "password": "test_password",
-    }
-    second_user = {
-        "username": "second_user",
-        "email": "second@example.com",
-        "password": "test_password",
-    }
+def test_users_can_only_see_their_own_tasks(client, user_factory):
+    first_user = user_factory("first_user", "first@example.com")
+    second_user = user_factory("second_user", "second@example.com")
 
-    first_register = client.post("/auth/register", json=first_user)
-    second_register = client.post("/auth/register", json=second_user)
-
-    assert first_register.status_code == 201
-    assert second_register.status_code == 201
-
-    first_login = client.post(
-        "/auth/login",
-        json={
-            "email": first_user["email"],
-            "password": first_user["password"],
-        },
-    )
-    second_login = client.post(
-        "/auth/login",
-        json={
-            "email": second_user["email"],
-            "password": second_user["password"],
-        },
-    )
-
-    first_headers = {
-        "Authorization": f"Bearer {first_login.json()['access_token']}"
-    }
-    second_headers = {
-        "Authorization": f"Bearer {second_login.json()['access_token']}"
-    }
-
-    client.post(
+    first_task_response = client.post(
         "/tasks",
-        headers=first_headers,
         json={"title": "Задача первого пользователя"},
+        headers=first_user["headers"],
     )
-    client.post(
+    second_task_response = client.post(
         "/tasks",
-        headers=second_headers,
         json={"title": "Задача второго пользователя"},
+        headers=second_user["headers"],
     )
 
-    first_response = client.get("/tasks", headers=first_headers)
-    second_response = client.get("/tasks", headers=second_headers)
+    assert first_task_response.status_code == 201
+    assert second_task_response.status_code == 201
+
+    first_response = client.get("/tasks", headers=first_user["headers"])
+    second_response = client.get("/tasks", headers=second_user["headers"])
 
     assert first_response.status_code == 200
     assert second_response.status_code == 200
@@ -125,15 +90,9 @@ def test_users_can_only_see_their_own_tasks(client):
 
     assert first_tasks[0]["title"] == "Задача первого пользователя"
     assert second_tasks[0]["title"] == "Задача второго пользователя"
-    # пользователи видят свои задачи
-    assert (
-        first_tasks[0]["user_id"]
-        == first_register.json()["id"]
-    )
-    assert (
-        second_tasks[0]["user_id"]
-        == second_register.json()["id"]
-    )
+
+    assert first_tasks[0]["user_id"] == first_user["id"]
+    assert second_tasks[0]["user_id"] == second_user["id"]
 
 # тест на получение задачи по id
 def test_get_task_by_id(client, auth_headers, task_factory):
@@ -149,53 +108,22 @@ def test_get_task_by_id(client, auth_headers, task_factory):
     assert response.json()["title"] == "My task"
 
 # тест на недоступность чужой задачи
-def test_user_cannot_get_another_users_task(client):
-    first_user = {
-        "username": "owner_user",
-        "email": "owner@example.com",
-        "password": "test_password",
-    }
-    second_user = {
-        "username": "other_user",
-        "email": "other@example.com",
-        "password": "test_password",
-    }
-
-    client.post("/auth/register", json=first_user)
-    client.post("/auth/register", json=second_user)
-
-    owner_login = client.post(
-        "/auth/login",
-        json={
-            "email": first_user["email"],
-            "password": first_user["password"],
-        },
-    )
-    other_login = client.post(
-        "/auth/login",
-        json={
-            "email": second_user["email"],
-            "password": second_user["password"],
-        },
-    )
-
-    owner_headers = {
-        "Authorization": f"Bearer {owner_login.json()['access_token']}"
-    }
-    other_headers = {
-        "Authorization": f"Bearer {other_login.json()['access_token']}"
-    }
+def test_user_cannot_get_another_users_task(client, user_factory):
+    owner = user_factory("owner_user", "owner@example.com")
+    other_user = user_factory("other_user", "other@example.com")
 
     create_response = client.post(
         "/tasks",
-        headers=owner_headers,
         json={"title": "Чужая задача"},
+        headers=owner["headers"],
     )
+    assert create_response.status_code == 201
+
     task_id = create_response.json()["id"]
-    # пытаемся получить задачу другого пользователя
+
     response = client.get(
         f"/tasks/{task_id}",
-        headers=other_headers,
+        headers=other_user["headers"],
     )
 
     assert response.status_code == 404
@@ -222,55 +150,33 @@ def test_update_task(client, auth_headers, task_factory):
     assert updated_task["priority"] == "medium"
 
 # Проверяем защиту чужих задач
-def test_user_cannot_update_another_users_task(client):
-    first_user = {
-        "username": "ivan",
-        "email": "ivan@example.com",
-        "password": "strongpassword123",
-    }
-    second_user = {
-        "username": "petr",
-        "email": "petr@example.com",
-        "password": "strongpassword123",
-    }
+def test_user_cannot_update_another_users_task(client, user_factory):
+    owner = user_factory("ivan", "ivan@example.com")
+    other_user = user_factory("petr", "petr@example.com")
 
-    client.post("/auth/register", json=first_user)
-    client.post("/auth/register", json=second_user)
-
-    first_login = client.post(
-        "/auth/login",
-        json={
-            "email": first_user["email"],
-            "password": first_user["password"],
-        },
-    )
-    first_token = first_login.json()["access_token"]
-    first_headers = {"Authorization": f"Bearer {first_token}"}
-
-    second_login = client.post(
-        "/auth/login",
-        json={
-            "email": second_user["email"],
-            "password": second_user["password"],
-        },
-    )
-    second_token = second_login.json()["access_token"]
-    second_headers = {"Authorization": f"Bearer {second_token}"}
-    # один юзер создал задачу
     task_response = client.post(
         "/tasks",
         json={"title": "Private task"},
-        headers=first_headers,
+        headers=owner["headers"],
     )
+    assert task_response.status_code == 201
+
     task_id = task_response.json()["id"]
-    # другой пытается изменить
-    update_response = client.patch(
+
+    response = client.patch(
         f"/tasks/{task_id}",
         json={"title": "Hacked task"},
-        headers=second_headers,
+        headers=other_user["headers"],
     )
 
-    assert update_response.status_code == 404
+    assert response.status_code == 404
+
+    owner_response = client.get(
+        f"/tasks/{task_id}",
+        headers=owner["headers"],
+    )
+    assert owner_response.status_code == 200
+    assert owner_response.json()["title"] == "Private task"
 
 
 def test_delete_task(client, auth_headers, task_factory):
@@ -292,62 +198,32 @@ def test_delete_task(client, auth_headers, task_factory):
     assert get_response.status_code == 404
 
 
-def test_user_cannot_delete_another_users_task(client):
-    first_user = {
-        "username": "ivan",
-        "email": "ivan@example.com",
-        "password": "strongpassword123",
-    }
-    second_user = {
-        "username": "petr",
-        "email": "petr@example.com",
-        "password": "strongpassword123",
-    }
-
-    client.post("/auth/register", json=first_user)
-    client.post("/auth/register", json=second_user)
-
-    first_login = client.post(
-        "/auth/login",
-        json={
-            "email": first_user["email"],
-            "password": first_user["password"],
-        },
-    )
-    first_headers = {
-        "Authorization": f"Bearer {first_login.json()['access_token']}"
-    }
-
-    second_login = client.post(
-        "/auth/login",
-        json={
-            "email": second_user["email"],
-            "password": second_user["password"],
-        },
-    )
-    second_headers = {
-        "Authorization": f"Bearer {second_login.json()['access_token']}"
-    }
+def test_user_cannot_delete_another_users_task(client, user_factory):
+    owner = user_factory("ivan", "ivan@example.com")
+    other_user = user_factory("petr", "petr@example.com")
 
     task_response = client.post(
         "/tasks",
         json={"title": "Private task"},
-        headers=first_headers,
+        headers=owner["headers"],
     )
+    assert task_response.status_code == 201
+
     task_id = task_response.json()["id"]
 
-    delete_response = client.delete(
+    response = client.delete(
         f"/tasks/{task_id}",
-        headers=second_headers,
+        headers=other_user["headers"],
     )
 
-    assert delete_response.status_code == 404
+    assert response.status_code == 404
 
-    get_response = client.get(
+    owner_response = client.get(
         f"/tasks/{task_id}",
-        headers=first_headers,
+        headers=owner["headers"],
     )
-    assert get_response.status_code == 200
+    assert owner_response.status_code == 200
+    assert owner_response.json()["title"] == "Private task"
 
 # Фильтрация по приоритету
 def test_filter_tasks_by_priority(client, auth_headers, task_factory):
@@ -404,84 +280,52 @@ def test_filter_tasks_by_status_and_priority(client, auth_headers, task_factory)
     assert tasks[0]["priority"] == "high"
 
 
-def test_task_pagination(client):
-    client.post(
-        "/auth/register",
-        json={
-            "username": "ivan",
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
+def test_task_pagination(client, auth_headers, task_factory):
     for title in ["Task 1", "Task 2", "Task 3"]:
-        response = client.post(
-            "/tasks",
-            json={"title": title},
-            headers=headers,
-        )
-        assert response.status_code == 201
-    # должно вывести последние 2 созданные задачи
+        task_factory(title)
+
     response = client.get(
-        "/tasks?limit=2&offset=0",
-        headers=headers,
+        "/tasks",
+        params={"limit": 2, "offset": 0},
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
+
     tasks = response.json()
     assert len(tasks) == 2
     assert [task["title"] for task in tasks] == ["Task 3", "Task 2"]
-    # offset=2 пропускаем первые две задачи
+
     response = client.get(
-        "/tasks?limit=2&offset=2",
-        headers=headers,
+        "/tasks",
+        params={"limit": 2, "offset": 2},
+        headers=auth_headers,
     )
 
     assert response.status_code == 200
+
     tasks = response.json()
     assert len(tasks) == 1
     assert tasks[0]["title"] == "Task 1"
 
 
-def test_task_pagination_rejects_invalid_parameters(client):
-    client.post(
-        "/auth/register",
-        json={
-            "username": "ivan",
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-    # задаем неправильные параметры
+def test_task_pagination_rejects_invalid_parameters(client, auth_headers):
     invalid_queries = [
-        "/tasks?limit=0",
-        "/tasks?limit=101",
-        "/tasks?offset=-1",
+        {"limit": 0},
+        {"limit": 101},
+        {"offset": -1},
     ]
 
-    for query in invalid_queries:
-        response = client.get(query, headers=headers)
-        assert response.status_code == 422
+    for params in invalid_queries:
+        response = client.get(
+            "/tasks",
+            params=params,
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 422, (
+            f"Ожидался статус 422 для параметров: {params}"
+        )
 
 
 def test_task_pagination_with_filters(client, auth_headers, task_factory):
@@ -510,30 +354,11 @@ def test_task_pagination_with_filters(client, auth_headers, task_factory):
     assert all(task["priority"] == "high" for task in tasks)
 
 
-def test_create_task_with_whitespace_title(client):
-    client.post(
-        "/auth/register",
-        json={
-            "username": "ivan",
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-
-    login_response = client.post(
-        "/auth/login",
-        json={
-            "email": "ivan@example.com",
-            "password": "strongpassword123",
-        },
-    )
-    token = login_response.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-    #
+def test_create_task_with_whitespace_title(client, auth_headers):
     response = client.post(
         "/tasks",
         json={"title": "   "},
-        headers=headers,
+        headers=auth_headers,
     )
 
     assert response.status_code == 422
