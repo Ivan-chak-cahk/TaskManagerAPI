@@ -1,3 +1,5 @@
+import pytest
+
 from datetime import timedelta
 
 from app.core.security import create_access_token
@@ -166,3 +168,71 @@ def test_inactive_user_cannot_login(client, db, user_factory):
     )
 
     assert response.status_code == 401
+
+# тесты с параметром запустятся несколько раз
+@pytest.mark.parametrize(
+    "username",
+    ["ab", "a" * 51, "bad name"],
+)
+def test_register_with_invalid_username(client, username):
+    response = client.post(
+        "/auth/register",
+        json={
+            "username": username,
+            "email": "valid@example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.parametrize("password", ["short", "a" * 129])
+def test_register_with_invalid_password(client, password):
+    response = client.post(
+        "/auth/register",
+        json={
+            "username": "valid_user",
+            "email": "valid@example.com",
+            "password": password,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_email_is_case_insensitive(client):
+    register_response = client.post(
+        "/auth/register",
+        json={
+            "username": "case_user",
+            "email": "Case.User@Example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    assert register_response.status_code == 201
+    assert register_response.json()["email"] == "case.user@example.com"
+
+    # вход с другим регистром
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "CASE.USER@example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    assert login_response.status_code == 200
+
+    # повторная регистрация с другим регистром - дубликат
+    duplicate_response = client.post(
+        "/auth/register",
+        json={
+            "username": "other_user",
+            "email": "case.user@EXAMPLE.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    assert duplicate_response.status_code == 409

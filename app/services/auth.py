@@ -1,5 +1,6 @@
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.db.models import User
 from app.schemas.user import UserCreate
@@ -29,7 +30,13 @@ def register_user(db: Session, user_data: UserCreate) -> User:
     )
 
     db.add(user)
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError as error:
+        db.rollback()  # без rollback сессия останется в сломанном состоянии
+        raise ValueError("Username or email already exists") from error
+
     db.refresh(user)
 
     return user
