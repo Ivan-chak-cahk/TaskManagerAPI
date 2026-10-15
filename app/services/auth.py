@@ -44,8 +44,8 @@ def authenticate_user(
         select(User).where(User.email == email)
     )
 
-    if user is None:
-        raise ValueError("Invalid email or password")  # Если его нет
+    if user is None or not user.is_active:
+        raise ValueError("Invalid email or password")  # Если его нет или неактивен
 
     if not verify_password(password, user.password_hash):  # Если есть — проверяем пароль
         raise ValueError("Invalid email or password")

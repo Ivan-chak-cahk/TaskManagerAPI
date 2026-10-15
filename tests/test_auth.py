@@ -1,3 +1,8 @@
+from datetime import timedelta
+
+from app.core.security import create_access_token
+from app.db.models import User
+
 def test_register_user(client):
     response = client.post(
         "/auth/register",
@@ -107,6 +112,57 @@ def test_login_with_wrong_password(client):
             "email": "wrong_password@example.com",
             "password": "incorrect-password",
         },
+    )
+
+    assert response.status_code == 401
+
+
+def test_get_current_user_with_invalid_token(client):
+    response = client.get(
+        "/users/me",
+        headers={"Authorization": "Bearer not-a-real-token"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_get_current_user_with_expired_token(client, user_factory):
+    user = user_factory("expired_user", "expired@example.com")
+    token = create_access_token(
+        str(user["id"]),
+        expires_delta=timedelta(minutes=-1),
+    )
+
+    response = client.get(
+        "/users/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_inactive_user_cannot_use_api(client, db, user_factory):
+    user = user_factory("inactive_user", "inactive@example.com")
+
+    db_user = db.get(User, user["id"])
+    db_user.is_active = False
+    db.commit()
+
+    response = client.get("/users/me", headers=user["headers"])
+
+    assert response.status_code == 403
+
+
+def test_inactive_user_cannot_login(client, db, user_factory):
+    user = user_factory("inactive_login", "inactive_login@example.com")
+
+    db_user = db.get(User, user["id"])
+    db_user.is_active = False
+    db.commit()
+
+    response = client.post(
+        "/auth/login",
+        json={"email": user["email"], "password": user["password"]},
     )
 
     assert response.status_code == 401
