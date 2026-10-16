@@ -434,3 +434,52 @@ def test_get_nonexistent_task(client, auth_headers):
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Task not found"}
+
+
+def test_create_task_with_due_date(client, auth_headers):
+    response = client.post(
+        "/tasks",
+        json={"title": "With deadline", "due_date": "2026-12-31"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 201
+    assert response.json()["due_date"] == "2026-12-31"
+
+
+def test_create_task_without_due_date(task_factory):
+    task = task_factory("No deadline")
+
+    assert task["due_date"] is None
+
+
+def test_create_task_with_invalid_due_date(client, auth_headers):
+    response = client.post(
+        "/tasks",
+        json={"title": "Bad date", "due_date": "not-a-date"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_and_clear_due_date(client, auth_headers, task_factory):
+    task = task_factory("Task with changing deadline")
+
+    set_response = client.patch(
+        f"/tasks/{task['id']}",
+        json={"due_date": "2027-01-15"},
+        headers=auth_headers,
+    )
+
+    assert set_response.status_code == 200
+    assert set_response.json()["due_date"] == "2027-01-15"
+
+    clear_response = client.patch(
+        f"/tasks/{task['id']}",
+        json={"due_date": None},
+        headers=auth_headers,
+    )
+
+    assert clear_response.status_code == 200
+    assert clear_response.json()["due_date"] is None
