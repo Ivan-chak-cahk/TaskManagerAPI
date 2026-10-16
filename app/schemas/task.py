@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import (
     BaseModel,
@@ -16,6 +16,7 @@ class TaskCreate(BaseModel):
     description: str | None = None
     status: TaskStatus = TaskStatus.NEW
     priority: TaskPriority = TaskPriority.MEDIUM
+    due_date: date | None = None
 
     @field_validator("title")
     @classmethod
@@ -37,6 +38,7 @@ class TaskResponse(BaseModel):
     description: str | None
     status: TaskStatus
     priority: TaskPriority
+    due_date: date | None
     created_at: datetime
     updated_at: datetime
     user_id: int
@@ -51,6 +53,7 @@ class TaskUpdate(BaseModel):
     description: str | None = None  # null допустим: так описание очищают
     status: TaskStatus | None = None
     priority: TaskPriority | None = None
+    due_date: date | None = None  # null допустим: так срок снимают
 
     # то же правило, что и при создании: заголовок без пробелов по краям и не пустой
     @field_validator("title")

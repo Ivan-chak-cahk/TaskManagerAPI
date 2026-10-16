@@ -1,7 +1,8 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from enum import Enum
 
 from sqlalchemy import (
+    Date,
     DateTime,
     Enum as SQLEnum,
     ForeignKey,
@@ -65,6 +66,11 @@ class Task(Base):
         ),
         default=TaskPriority.MEDIUM,
         nullable=False,
+    )
+    # срок задачи
+    due_date: Mapped[date | None] = mapped_column(
+        Date,
+        nullable=True,
     )
 
     created_at: Mapped[datetime] = mapped_column(
