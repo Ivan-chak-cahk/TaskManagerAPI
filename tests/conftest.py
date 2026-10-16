@@ -1,5 +1,6 @@
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session, sessionmaker
 from fastapi.testclient import TestClient
 
@@ -7,6 +8,14 @@ from app.api.deps import get_db
 from app.db.base import Base
 from app.main import app
 from app.core.config import settings
+
+# после каждого теста все таблицы удаляются, поэтому тесты
+# нельзя запускать на рабочей базе
+if "test" not in (make_url(settings.test_database_url).database or ""):
+    raise RuntimeError(
+        "TEST_DATABASE_URL должен указывать на тестовую базу "
+        "(в её названии должно быть слово 'test')"
+    )
 
 # подключение к тестовой базе
 test_engine = create_engine(settings.test_database_url)
