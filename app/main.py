@@ -18,16 +18,14 @@ app.include_router(auth_router)
 app.include_router(users_router)
 app.include_router(tasks_router)
 
-
 # Единое место, где ошибки бизнес-логики превращаются в HTTP-ответ
-@app.exception_handler(AppError)
+@app.exception_handler(AppError)  # слушаем всё приложение
 async def app_error_handler(request: Request, exc: AppError):
     return JSONResponse(
         status_code=exc.status_code,
         content={"detail": exc.detail},
         headers=exc.headers,
     )
-
 
 # Когда придёт GET-запрос на /, вызывается функция root.
 @app.get("/")

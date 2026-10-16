@@ -1,9 +1,9 @@
-from sqlalchemy.orm import Session
 from sqlalchemy import select
-from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
+from app.core.exceptions import NotFoundError
 from app.db.models import Task, User
-from app.db.models.task import TaskStatus, TaskPriority
+from app.db.models.task import TaskPriority, TaskStatus
 from app.schemas.task import TaskCreate, TaskUpdate
 
 # Сохранение задачи в БД
@@ -65,10 +65,7 @@ def get_task_by_id(
     )
 
     if task is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found",
-        )
+        raise NotFoundError("Task not found")
 
     return task
 

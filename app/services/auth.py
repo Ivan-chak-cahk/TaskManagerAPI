@@ -1,14 +1,16 @@
 from sqlalchemy import or_, select
-from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from app.db.models import User
-from app.schemas.user import UserCreate
+from app.core.exceptions import AuthenticationError, ConflictError
 from app.core.security import (
     create_access_token,
     hash_password,
     verify_password,
 )
+from app.db.models import User
+from app.schemas.user import UserCreate
+
 
 def register_user(db: Session, user_data: UserCreate) -> User:
     existing_user = db.scalar(  # Ищем существующего пользователя
@@ -21,7 +23,7 @@ def register_user(db: Session, user_data: UserCreate) -> User:
     )
 
     if existing_user is not None:
-        raise ValueError("Username or email already exists")
+        raise ConflictError("Username or email already exists")
     # Создаём SQLAlchemy-модель
     user = User(
         username=user_data.username,
@@ -35,7 +37,7 @@ def register_user(db: Session, user_data: UserCreate) -> User:
         db.commit()
     except IntegrityError as error:
         db.rollback()  # без rollback сессия останется в сломанном состоянии
-        raise ValueError("Username or email already exists") from error
+        raise ConflictError("Username or email already exists") from error
 
     db.refresh(user)
 
@@ -52,9 +54,9 @@ def authenticate_user(
     )
 
     if user is None or not user.is_active:
-        raise ValueError("Invalid email or password")  # Если его нет или неактивен
+        raise AuthenticationError("Invalid email or password")
 
-    if not verify_password(password, user.password_hash):  # Если есть — проверяем пароль
-        raise ValueError("Invalid email or password")
+    if not verify_password(password, user.password_hash):
+        raise AuthenticationError("Invalid email or password")
     # если пароль правильный
     return create_access_token(str(user.id))
