@@ -236,3 +236,31 @@ def test_email_is_case_insensitive(client):
     )
 
     assert duplicate_response.status_code == 409
+
+
+def test_login_error_response(client, user_factory):
+    user_factory("login_user", "login@example.com")
+
+    response = client.post(
+        "/auth/login",
+        json={"email": "login@example.com", "password": "wrong-password"},
+    )
+
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid email or password"}
+
+
+def test_register_duplicate_error_response(client, user_factory):
+    user_factory("dup_user", "dup@example.com")
+
+    response = client.post(
+        "/auth/register",
+        json={
+            "username": "dup_user",
+            "email": "dup@example.com",
+            "password": "strongpassword123",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json() == {"detail": "Username or email already exists"}

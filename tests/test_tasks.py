@@ -427,3 +427,10 @@ def test_update_task_strips_title(
 
     assert response.status_code == 200
     assert response.json()["title"] == "New title"
+
+
+def test_get_nonexistent_task(client, auth_headers):
+    response = client.get("/tasks/999999", headers=auth_headers)
+
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Task not found"}
