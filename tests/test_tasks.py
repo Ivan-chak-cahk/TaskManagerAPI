@@ -1,3 +1,5 @@
+import pytest
+
 def test_create_task(client, auth_headers):
     response = client.post(
         "/tasks",
@@ -362,3 +364,66 @@ def test_create_task_with_whitespace_title(client, auth_headers):
     )
 
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize("field", ["title", "status", "priority"])
+def test_update_task_rejects_null_for_required_fields(
+    client, auth_headers, task_factory, field
+):
+    task = task_factory("Original title")
+
+    response = client.patch(
+        f"/tasks/{task['id']}",
+        json={field: None},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
+
+    # задача осталась без изменений
+    check = client.get(f"/tasks/{task['id']}", headers=auth_headers)
+    assert check.json()[field] == task[field]
+
+
+def test_update_task_can_clear_description(
+    client, auth_headers, task_factory
+):
+    task = task_factory("With description", description="Some text")
+
+    response = client.patch(
+        f"/tasks/{task['id']}",
+        json={"description": None},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["description"] is None
+
+
+def test_update_task_with_whitespace_title(
+    client, auth_headers, task_factory
+):
+    task = task_factory("Original title")
+
+    response = client.patch(
+        f"/tasks/{task['id']}",
+        json={"title": "   "},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 422
+
+
+def test_update_task_strips_title(
+        client, auth_headers, task_factory
+):
+    task = task_factory("Original title")
+
+    response = client.patch(
+        f"/tasks/{task['id']}",
+        json={"title": "  New title  "},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["title"] == "New title"

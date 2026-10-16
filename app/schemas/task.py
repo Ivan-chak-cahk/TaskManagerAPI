@@ -48,12 +48,30 @@ class TaskUpdate(BaseModel):
         min_length=1,
         max_length=255,
     )
-    description: str | None = None
+    description: str | None = None  # null допустим: так описание очищают
     status: TaskStatus | None = None
     priority: TaskPriority | None = None
-    # чтобы заголовок оставался необязательным при пропуске, но не мог быть явно задан как null.
+
+    # то же правило, что и при создании: заголовок без пробелов по краям и не пустой
+    @field_validator("title")
+    @classmethod
+    def strip_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        # strip() убирает пробелы
+        value = value.strip()
+
+        if not value:
+            raise ValueError("Title cannot be empty or whitespace")
+
+        return value
+
+    # Поля можно пропускать, но нельзя явно передавать null:
+    # в БД они NOT NULL. Для description null разрешён.
     @model_validator(mode="after")
-    def validate_title(self):
-        if "title" in self.model_fields_set and self.title is None:
-            raise ValueError("Title cannot be null")
+    def validate_not_null_fields(self):
+        for field in ("title", "status", "priority"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be null")
+
         return self
