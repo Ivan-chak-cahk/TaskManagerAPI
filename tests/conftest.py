@@ -11,7 +11,9 @@ from app.core.config import settings
 
 # после каждого теста все таблицы удаляются, поэтому тесты
 # нельзя запускать на рабочей базе
-if "test" not in (make_url(settings.test_database_url).database or ""):
+if not settings.test_database_url or "test" not in (
+    make_url(settings.test_database_url).database or ""
+):
     raise RuntimeError(
         "TEST_DATABASE_URL должен указывать на тестовую базу "
         "(в её названии должно быть слово 'test')"
